@@ -1,0 +1,30 @@
+.show-area {
+    display: flex;
+}
+
+#lightingModelInfo {
+    display:flex;
+}
+#lightingModel{
+    margin-left: 10;
+}
+
+#shadingModelInfo {
+    display:flex;
+    margin-bottom: 10;
+}
+#shadingModel{
+    margin-left: 10;
+}
+
+.ambient-configure {
+    display: flex;
+}
+
+.attenuation-configure {
+    display: flex;
+}
+
+#attenuation-formula {
+    margin-bottom: 0;
+}

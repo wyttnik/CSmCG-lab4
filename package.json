@@ -1,0 +1,13 @@
+{
+  "scripts": {
+    "start": "parcel index.html"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.19.1",
+    "@parcel/babel-preset-env": "^2.7.0",
+    "parcel": "^2.7.0"
+  },
+  "dependencies": {
+	"gl-matrix": "^3.4.3"
+  }
+}
