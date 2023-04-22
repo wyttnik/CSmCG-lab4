@@ -1,45 +1,108 @@
 import * as glm from "gl-matrix";
 import cube_vert from "./shaders/cube_vert";
 import cube_frag from "./shaders/cube_frag";
+import image_list from "./images/*";
 
 /** @type {WebGLRenderingContext} */
-let gl
+let gl;
 
 /** @type {WebGLProgram} */
-let shaderProgram
+let shaderProgram;
 
-let axisAngle = 0, cubeAngle = 0, podiumAngle = 0, ambientCoeff = 1.0, shadingModel = 0, lightingModel = 0, c1 = 0, c2 = 0
-let model, proj, view
+let axisAngle = 0, cubeAngle = 0, podiumAngle = 0, 
+  ambientCoeff = 1.0, shadingModel = 0, lightingModel = 0, c1 = 0.0001, c2 = 0;
+let model, proj, view, indices, brickTexture, iceTexture, woodTexture, onetex, twotex, threetex,
+  propDig = 0.5, propMat = 0.5, propCol = 0.5;
 
-main()
+main();
 
 function main() {
   
-  gl = document.getElementById("test").getContext("webgl2")
+  gl = document.getElementById("test").getContext("webgl2");
 
   if (gl === null) {
     alert(
       "Unable to initialize WebGL. Your browser or machine may not support it."
-    )
-    return
+    );
+    return;
   }
 
+  setupWebGL();
+  
+  initShaderProgram(cube_vert, cube_frag);
+  
+  initBuffers();
+  initProjMatrix();
+  initViewMatrix();
+  setupLights();
+
+  initListeners();
+  setupTextures();
+
+  requestAnimationFrame(render);
+}
+
+function setupTextures(){
+  brickTexture = gl.createTexture();
+  threetex = gl.createTexture();
+  setTexture([image_list['red_brick.png'], image_list['trthree.png']], [brickTexture,threetex]);
+     
+  iceTexture = gl.createTexture();
+  twotex = gl.createTexture();
+  setTexture([image_list['ice.jpg'], image_list['trtwo.png']], [iceTexture,twotex]);
+
+  woodTexture = gl.createTexture();
+  onetex = gl.createTexture();
+  setTexture([image_list['wood.jpg'], image_list['trone.png']], [woodTexture, onetex]);
+}
+
+function setupWebGL() {
   gl.clearColor(0.0, 0.0, 0.0, 1.0)
   gl.enable(gl.DEPTH_TEST)
+  gl.enable(gl.BLEND)
+  gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
   gl.depthFunc(gl.LEQUAL)
   gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT)
-  
-  initShaderProgram(cube_vert, cube_frag)
-  
-  initBuffers()
-  initProjMatrix()
-  initViewMatrix()
-  setupLights()
-
-  initListeners()
-
-  requestAnimationFrame(render)
 }
+
+function setTexture(urls, textures) {
+  for(let i = 0; i < urls.length; i++){
+    gl.bindTexture(gl.TEXTURE_2D, textures[i]);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE,
+      new Uint8Array([0, 0, 255, 255]));
+
+    let image = new Image();
+    image.onload = function() {
+      handleTextureLoaded(image, textures[i]);
+    }
+    // image.crossOrigin = "anonymous";
+    image.src = urls[i];
+
+    gl.uniform1i(gl.getUniformLocation(shaderProgram, "uSampler"+i), i);
+  }
+}
+
+function handleTextureLoaded(image, texture) {
+  gl.bindTexture(gl.TEXTURE_2D, texture);
+  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
+  if (isPowerOf2(image.width) && isPowerOf2(image.height)) {
+    // Yes, it's a power of 2. Generate mips.
+    gl.generateMipmap(gl.TEXTURE_2D);
+  } else {
+    // No, it's not a power of 2. Turn off mips and set
+    // wrapping to clamp to edge
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+  }
+}
+
+function isPowerOf2(value) {
+  return (value & (value - 1)) === 0;
+}
+
+
 
 function initListeners(){
   window.addEventListener("keydown", e => {
@@ -104,6 +167,50 @@ function initListeners(){
   document.getElementById('c2-range').oninput = () => {
     c2 = Number(document.getElementById('c2-range').value);
   }
+
+  document.getElementById('digit-range').value = propDig;
+  document.getElementById('material-range').value = propMat;
+
+  document.getElementById('material-range').oninput = () => {
+    propMat = Number(document.getElementById('material-range').value);
+  }
+
+  document.getElementById('digit-range').oninput = () => {
+    propDig = Number(document.getElementById('digit-range').value);
+  }
+
+  // console.log(document.getElementById('color-range').value);
+  // document.getElementById('color-range').oninput = () => {
+  //   propCol = Number(document.getElementById('color-range').value);
+  //   temp = 1 - propCol - (propDig + propMat);
+  //   if (temp < 0) {
+  //     propCol = Math.ceil(propCol*100)/100;
+  //     temp = 1 - propCol - (propDig + propMat);
+  //     if (propDig == 0) propMat += temp;
+  //     else if (propMat == 0) propDig += temp;
+  //     else{
+  //       propDig += temp/2;
+  //       propMat += temp/2;
+  //     }
+  //   }
+  //   else {
+  //     propCol = Math.floor(propCol*100)/100;
+  //     temp = 1 - propCol - (propDig + propMat);
+  //     if (propDig == 1) propMat += temp;
+  //     else if (propMat == 1) propDig += temp;
+  //     else{
+  //       propDig += temp/2;
+  //       propMat += temp/2;
+  //     }
+  //   }
+  //   propDig = Math.max(propDig,0.0);
+  //   propMat = Math.max(propMat,0.0);
+    
+  //   document.getElementById('color-range').value = propCol;
+  //   document.getElementById('digit-range').value = propDig;
+  //   document.getElementById('material-range').value = propMat;
+  // }
+  //
 }
 
 function setupLights() {
@@ -163,12 +270,17 @@ function printglMat(mat, k) {
 function render(){
   gl.viewport(0,0,gl.canvas.width, gl.canvas.height)
   gl.clear(gl.COLOR_BUFFER_BIT| gl.DEPTH_BUFFER_BIT)
+  
 
   gl.uniform1f(gl.getUniformLocation(shaderProgram,"uc1"), c1);
   gl.uniform1f(gl.getUniformLocation(shaderProgram,"uc2"), c2);
+  gl.uniform1f(gl.getUniformLocation(shaderProgram,"uAmbientCoeff"), ambientCoeff);
+  gl.uniform1f(gl.getUniformLocation(shaderProgram,"uPropCol"), propCol);
+  gl.uniform1f(gl.getUniformLocation(shaderProgram,"uPropMat"), propMat);
+  gl.uniform1f(gl.getUniformLocation(shaderProgram,"uPropDig"), propDig);
+
   gl.uniform1f(gl.getUniformLocation(shaderProgram,'uLightingModel'), lightingModel);
   gl.uniform1f(gl.getUniformLocation(shaderProgram,'uShadingModel'), shadingModel);
-  gl.uniform1f(gl.getUniformLocation(shaderProgram,"uAmbientCoeff"), ambientCoeff);
 
   // Bronze
   model = glm.mat4.create()
@@ -176,7 +288,13 @@ function render(){
   initModelMatrix(6,4)
   initNormMatrix()
   gl.uniform3fv(gl.getUniformLocation(shaderProgram,"uColor"),[0.69,0.55,0.34])
-  gl.drawElements(gl.TRIANGLES, 36, gl.UNSIGNED_SHORT, 0)
+  
+  gl.activeTexture(gl.TEXTURE0);
+  gl.bindTexture(gl.TEXTURE_2D, brickTexture);
+  gl.activeTexture(gl.TEXTURE1);
+  gl.bindTexture(gl.TEXTURE_2D, threetex);
+
+  gl.drawElements(gl.TRIANGLES, indices.length, gl.UNSIGNED_SHORT, 0)
 
   // Silver
   model = glm.mat4.create()
@@ -185,7 +303,13 @@ function render(){
   initNormMatrix()
 
   gl.uniform3fv(gl.getUniformLocation(shaderProgram,"uColor"),[0.75,0.75,0.75])
-  gl.drawElements(gl.TRIANGLES, 36, gl.UNSIGNED_SHORT, 0)
+
+  gl.activeTexture(gl.TEXTURE0);
+  gl.bindTexture(gl.TEXTURE_2D, iceTexture);
+  gl.activeTexture(gl.TEXTURE1);
+  gl.bindTexture(gl.TEXTURE_2D, twotex);
+
+  gl.drawElements(gl.TRIANGLES, indices.length, gl.UNSIGNED_SHORT, 0)
 
   // Gold bottom
   model = glm.mat4.create()
@@ -194,7 +318,13 @@ function render(){
   initNormMatrix()
 
   gl.uniform3fv(gl.getUniformLocation(shaderProgram,"uColor"),[0.83,0.686,0.216])
-  gl.drawElements(gl.TRIANGLES, 36, gl.UNSIGNED_SHORT, 0)
+  
+  gl.activeTexture(gl.TEXTURE0);
+  gl.bindTexture(gl.TEXTURE_2D, woodTexture);
+  gl.activeTexture(gl.TEXTURE1);
+  gl.bindTexture(gl.TEXTURE_2D, onetex);
+
+  gl.drawElements(gl.TRIANGLES, indices.length, gl.UNSIGNED_SHORT, 0)
 
   // Gold top
   model = glm.mat4.create()
@@ -203,7 +333,7 @@ function render(){
   initModelMatrix(4,4)
   //initNormMatrix()
 
-  gl.drawElements(gl.TRIANGLES, 36, gl.UNSIGNED_SHORT, 0)
+  gl.drawElements(gl.TRIANGLES, indices.length, gl.UNSIGNED_SHORT, 0)
 
   requestAnimationFrame(render)
 }
@@ -257,16 +387,16 @@ function initBuffers() {
     -1.0, -1.0, 1.0, 1.0, -1.0, 1.0, 1.0, 1.0, 1.0, -1.0, 1.0, 1.0,
 
     // Back face
-    -1.0, -1.0, -1.0, -1.0, 1.0, -1.0, 1.0, 1.0, -1.0, 1.0, -1.0, -1.0,
+    1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, 1.0, -1.0, 1.0, 1.0, -1.0,
 
     // Top face
-    -1.0, 1.0, -1.0, -1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, -1.0,
+    -1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, -1.0, -1.0, 1.0, -1.0,
 
     // Bottom face
     -1.0, -1.0, -1.0, 1.0, -1.0, -1.0, 1.0, -1.0, 1.0, -1.0, -1.0, 1.0,
 
     // Right face
-    1.0, -1.0, -1.0, 1.0, 1.0, -1.0, 1.0, 1.0, 1.0, 1.0, -1.0, 1.0,
+    1.0, -1.0, 1.0, 1.0, -1.0, -1.0, 1.0, 1.0, -1.0, 1.0, 1.0, 1.0,
 
     // Left face
     -1.0, -1.0, -1.0, -1.0, -1.0, 1.0, -1.0, 1.0, 1.0, -1.0, 1.0, -1.0,
@@ -277,16 +407,6 @@ function initBuffers() {
     // -1.0,-1.0,1.0, 1.0,-1.0,1.0, 1.0,1.0,1.0, -1.0,1.0,1.0, // front
     // -1.0,-1.0,-1.0, 1.0,-1.0,-1.0, 1.0,1.0,-1.0, -1.0,1.0,-1.0 // back
   ]
-  // let test = glm.vec3.create()
-  // let a = glm.vec3.create()
-  // let b = glm.vec3.create()
-  // console.log(test)
-  // console.log(glm.vec3.cross(test, 
-  //   glm.vec3.subtract(b,[1.0, -1.0, 1.0],[-1.0, -1.0, 1.0]),
-  //   glm.vec3.subtract(a,[-1.0, 1.0, 1.0],[-1.0, -1.0, 1.0])))
-  // console.log(a)
-  // console.log(b)
-  // console.log(glm.vec3.normalize(test,test))
 
   gl.bindBuffer(gl.ARRAY_BUFFER, posBuffer)
   gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW)
@@ -296,13 +416,13 @@ function initBuffers() {
   gl.vertexAttribPointer(vertPos, 3, gl.FLOAT, false, 0, 0)
 
   const indexBuffer = gl.createBuffer()
-  let indices = [
-    0,  1,  2,  0,  2,  3,  // front
-    4,  5,  6,  4,  6,  7,  // back
-    8,  9,  10, 8,  10, 11, // top
-    12, 13, 14, 12, 14, 15, // bottom
-    16, 17, 18, 16, 18, 19, // right
-    20, 21, 22, 20, 22, 23, // left
+  indices = [
+    0,  1,  2,  2,  3,  0,  // front
+    4,  5,  6,  6,  7,  4,  // back
+    8,  9,  10, 10, 11, 8,  // top
+    12, 13, 14, 14, 15, 12, // bottom
+    16, 17, 18, 18, 19, 16, // right
+    20, 21, 22, 22, 23, 20 // left
 
     // for trivial case, when one color, no/one normal
     // 0, 1, 2, 0, 2, 3, // front
@@ -343,4 +463,14 @@ function initBuffers() {
   const normalPos = gl.getAttribLocation(shaderProgram,"aNormal")
   gl.enableVertexAttribArray(normalPos)
   gl.vertexAttribPointer(normalPos, 3, gl.FLOAT, false, 0, 0)
+
+  const textCoordsBuffer = gl.createBuffer();
+  const textureCoordinates = [];
+  for (let i=0; i<6; i++) { textureCoordinates.push(0.0, 0.0,  1.0, 0.0,  1.0, 1.0,  0.0, 1.0 ); }
+
+  gl.bindBuffer(gl.ARRAY_BUFFER, textCoordsBuffer);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(textureCoordinates), gl.STATIC_DRAW);
+  const aTextCoords = gl.getAttribLocation(shaderProgram,"aTextureCoords");
+  gl.enableVertexAttribArray(aTextCoords);
+  gl.vertexAttribPointer(aTextCoords, 2, gl.FLOAT, false, 0, 0);
 }

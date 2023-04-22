@@ -1,2 +1,2 @@
-# CSmCG-lab4
-Solution to lab4 of MMCS CSmCG course
+# WebGL Project
+Example of basic WebGL operations

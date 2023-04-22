@@ -1,9 +1,12 @@
-const cube_vert = `attribute vec3 aVertex;
+const cube_vert = `
+attribute vec3 aVertex;
 attribute vec3 aNormal;
+attribute vec2 aTextureCoords;
 
 uniform mat4 uModel;
 uniform mat4 uProj;
 uniform mat4 uView;
+uniform vec3 uViewPos;
 uniform mat3 uNMatrix;
 uniform vec3 uLightPosition;
 uniform vec3 uAmbientLightColor;
@@ -15,6 +18,7 @@ uniform float uAmbientCoeff;
 uniform float uc1;
 uniform float uc2;
 
+varying vec2 vTextureCoords;
 varying vec3 vLightWeighting;
 varying vec3 vNormal;
 varying vec3 vVertexPositionEye3;
@@ -56,17 +60,26 @@ void main() {
         1.0 / (1.0 + uc1*d + uc2*pow(d,2.0)) * (uDiffuseLightColor * diffLightDot + uSpecularLightColor * specLightParam);
     }
     else if  (uLightingModel == 3.0){ // Toon
-      float dirLight = dot(normal,dirToLight);
-      float lightInt = smoothstep(0.0, 0.01, dirLight);
-      float specLightDot = dot(normal,halfDir);
-      float specLightParam = pow(specLightDot * lightInt, 1000.0/materialShininess);
-      float specSmooth = smoothstep(0.05, 0.1, specLightParam);
+      vec3 k;
+      if (diffLightDot > 0.95) k = vec3(1.0, 1.0, 1.0);
+      else if(diffLightDot > 0.75) k = vec3(0.8, 0.8, 0.8);
+      else if (diffLightDot > 0.25) k = vec3(0.4,0.4,0.4);
+      else k = vec3(0.2, 0.2, 0.2);
 
-      vLightWeighting = uAmbientCoeff * uAmbientLightColor + 
-        1.0 / (1.0 + uc1*d + uc2*pow(d,2.0)) * (uSpecularLightColor * (lightInt + specSmooth));
+      float specLightDot = max(dot(normal,halfDir),0.0);
+      float specLightParam = pow(specLightDot, materialShininess);
+
+      // float dirLight = dot(normal,dirToLight);
+      // float lightInt = smoothstep(0.0, 0.01, dirLight);
+      // float specLightDot = dot(normal,halfDir);
+      // float specLightParam = pow(specLightDot * lightInt, 1000.0/materialShininess);
+      // float specSmooth = smoothstep(0.05, 0.1, specLightParam);
+
+      vLightWeighting = k;
     }
   }
   gl_Position = uProj * vertexPositionEye4;
+  vTextureCoords = aTextureCoords;
 }`;
 
 export default cube_vert;
